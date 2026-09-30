@@ -36,6 +36,12 @@ resultado funcionando. Usar IA pra escrever o código mata o objetivo.
       Descoberta e registro automático das rotas, mapeamento prático tipo os
       atributos de controller do ASP.NET.
 
+
+- [ ] **CLI** — três comandos, seguindo o modelo mental do .NET:
+      - `aspython new` — cria o projeto (= `dotnet new`), já com o `pyproject.toml`
+        configurado
+      - `aspython run` — sobe a aplicação (= `dotnet run`)
+      - `aspython check` — roda o type checker (= o build que falha em warning)
 ## Tipagem estática (descoberto em 30/09/2026)
 
 Type hint em Python é quase um comentário — o interpretador ignora. Isso executa
@@ -93,6 +99,58 @@ verdade durante a execução quando alguém passa tipo errado: `typeguard`
 dependência lendo a assinatura em runtime, via `inspect.signature()` e
 `typing.get_type_hints()`. É a mesma introspecção que essas libs usam por baixo.
 Vale olhar como elas fazem antes de escrever o container.
+
+### Decisão: como o CLI amarra isso
+
+O `aspython new` gera o `pyproject.toml` já configurado. Quem decide a severidade é
+o usuário, na própria config:
+
+```toml
+[tool.pyright]
+strict = ["src"]
+
+[tool.aspython]
+typecheck = "error"   # error | warn | off
+```
+
+**Um arquivo só.** Não criar um `aspython.toml` separado — `[tool.pyright]` já mora
+no `pyproject.toml` e é de lá que o Pylance lê. Config em dois lugares racha a
+fonte da verdade.
+
+O `check` roda o pyright como subprocess e usa o **exit code** dele (≠ 0 = achou
+problema). O `run` consulta `typecheck` e só chama o `check` antes de subir se
+estiver em `"error"`:
+
+```
+if config.typecheck == "error":
+    check()  # aborta se exit code != 0
+run_server()
+```
+
+### Cuidado: não virar compilação
+
+Type check completo leva segundos. Se o `run` sempre checar, eu pago isso toda vez
+que reinicio em dev. O `dotnet run` pode fazer isso porque C# *precisa* compilar de
+qualquer jeito — Python não precisa. Isso reintroduz latência que a linguagem não
+tem.
+
+Por isso o default do template deve ser `"warn"` ou `"off"`. Quem quer o gate duro
+liga, e o CI chama `aspython check` direto, sem passar pelo `run`.
+
+### Em aberto: pyright arrasta Node
+
+`pip install pyright` é um wrapper que baixa o Node na primeira execução. Se o
+framework invoca o pyright por dentro, um framework Python passa a ter dependência
+escondida de Node. Mypy é Python puro, mas diverge do Pylance.
+
+| | IDE | invocado pelo framework |
+|---|---|---|
+| pyright | já é o Pylance | arrasta Node |
+| mypy | diverge do Pylance | pip puro |
+
+Sem escolha limpa. Decisão atual: pyright, aceitando o Node. Alternativa a
+considerar depois — deixar o comando do checker configurável e rodar como
+subprocess genérico, sem o framework escolher por mim.
 
 ## Nome
 
