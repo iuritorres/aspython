@@ -1,0 +1,10 @@
+[MAIN]
+source-root=src
+load-plugins=
+    pylint.extensions.private_import
+
+[MESSAGES CONTROL]
+disable=
+    missing-module-docstring,
+    missing-class-docstring,
+    missing-function-docstring,
